@@ -59,9 +59,13 @@ public final class HamiloAgent {
                 info.setBorder(javax.swing.BorderFactory.createEmptyBorder(12, 16, 12, 16));
                 frame.add(info, java.awt.BorderLayout.CENTER);
 
+                javax.swing.JButton install = new javax.swing.JButton("Install to Fabric");
+                install.addActionListener(event -> installForFabric(frame));
+
                 javax.swing.JButton close = new javax.swing.JButton("Close");
                 close.addActionListener(event -> frame.dispose());
                 javax.swing.JPanel footer = new javax.swing.JPanel();
+                footer.add(install);
                 footer.add(close);
                 frame.add(footer, java.awt.BorderLayout.SOUTH);
                 frame.setVisible(true);
@@ -69,6 +73,76 @@ public final class HamiloAgent {
             });
         } catch (Throwable error) {
             System.err.println("[Hamilo] Standalone GUI startup failed:");
+            error.printStackTrace(System.err);
+        }
+    }
+
+    /**
+     * Execute .jar runs in a separate JVM, so it cannot attach this code to a
+     * different Minecraft JVM. Provide a working Fabric install path instead:
+     * copy this same mod JAR into Pojav's active .minecraft/mods directory.
+     * It will load when that Fabric profile is next launched.
+     */
+    private static void installForFabric(javax.swing.JFrame owner) {
+        try {
+            java.io.File source = new java.io.File(
+                    HamiloAgent.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            if (!source.isFile() || !source.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".jar")) {
+                throw new java.io.IOException("Hamilo must be run from its packaged JAR file.");
+            }
+
+            String home = System.getProperty("user.home", "");
+            String userDir = System.getProperty("user.dir", "");
+            java.io.File homeDir = new java.io.File(home);
+            java.io.File userDirFile = new java.io.File(userDir);
+            java.io.File modsDir = null;
+
+            // Pojav's Execute .jar runtime normally sets user.home to .minecraft.
+            java.io.File[] candidates = {
+                    new java.io.File(homeDir, "mods"),
+                    new java.io.File(userDirFile, "mods"),
+                    new java.io.File(homeDir, ".minecraft/mods")
+            };
+            for (java.io.File candidate : candidates) {
+                java.io.File parent = candidate.getParentFile();
+                if (parent != null && parent.isDirectory()
+                        && (parent.getName().equals(".minecraft") || candidate.getName().equals("mods"))) {
+                    modsDir = candidate;
+                    break;
+                }
+            }
+
+            if (modsDir == null) {
+                javax.swing.JFileChooser chooser = new javax.swing.JFileChooser(
+                        homeDir.isDirectory() ? homeDir : userDirFile);
+                chooser.setDialogTitle("Choose your Minecraft .minecraft folder");
+                chooser.setFileSelectionMode(javax.swing.JFileChooser.DIRECTORIES_ONLY);
+                chooser.setAcceptAllFileFilterUsed(false);
+                if (chooser.showOpenDialog(owner) != javax.swing.JFileChooser.APPROVE_OPTION) return;
+                modsDir = new java.io.File(chooser.getSelectedFile(), "mods");
+            }
+
+            if (!modsDir.exists() && !modsDir.mkdirs()) {
+                throw new java.io.IOException("Could not create mods directory: " + modsDir);
+            }
+            java.io.File target = new java.io.File(modsDir, "hamilo-client.jar");
+            if (source.getCanonicalFile().equals(target.getCanonicalFile())) {
+                javax.swing.JOptionPane.showMessageDialog(owner,
+                        "Hamilo is already installed here:\n" + target.getAbsolutePath(),
+                        "Hamilo Client", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            java.nio.file.Files.copy(source.toPath(), target.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            javax.swing.JOptionPane.showMessageDialog(owner,
+                    "Hamilo was installed to:\n" + target.getAbsolutePath()
+                    + "\n\nClose Minecraft completely, then launch the same Fabric profile again. "
+                    + "Execute .jar cannot inject into a different running JVM.",
+                    "Hamilo Client — Installed", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+        } catch (Throwable error) {
+            javax.swing.JOptionPane.showMessageDialog(owner,
+                    "Install failed: " + error.getClass().getSimpleName() + ": " + error.getMessage(),
+                    "Hamilo Client", javax.swing.JOptionPane.ERROR_MESSAGE);
             error.printStackTrace(System.err);
         }
     }
