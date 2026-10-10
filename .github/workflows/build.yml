@@ -20,16 +20,17 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10'
-      - name: Build agent JAR
+      - name: Build injectable JAR
         run: gradle build
-      - name: Verify agent manifest
+      - name: Verify injection manifest
         run: |
           test -f build/libs/hamilo-client-1.0.0.jar
+          unzip -p build/libs/hamilo-client-1.0.0.jar META-INF/MANIFEST.MF | grep -q 'PreMain-Class: dev.hamilo.client.HamiloAgent'
           unzip -p build/libs/hamilo-client-1.0.0.jar META-INF/MANIFEST.MF | grep -q 'Premain-Class: dev.hamilo.client.HamiloAgent'
           unzip -p build/libs/hamilo-client-1.0.0.jar META-INF/MANIFEST.MF | grep -q 'Agent-Class: dev.hamilo.client.HamiloAgent'
-      - name: Upload agent JAR
+      - name: Upload injectable JAR
         uses: actions/upload-artifact@v4
         with:
-          name: hamilo-client-jar
+          name: hamilo-client-injectable-jar
           path: build/libs/hamilo-client-1.0.0.jar
           if-no-files-found: error
