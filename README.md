@@ -15,16 +15,18 @@ Hamilo Client is an experimental Minecraft Java Edition 1.21 client GUI packaged
 - Java 21
 - A Pojav build that supports the custom `PreMain-Class` injection entry point.
 
-**Important:** Do not choose **Execute .jar** for a running Java 21 game if your Pojav build reports that this feature is incompatible with Java 21. That message comes from the launcher's execution feature; changing the JAR manifest cannot override it. Launch Minecraft first, then use the launcher's **Inject .jar** option if your installed build provides it. If that option is unavailable or rejects the JAR, the launcher itself needs a compatible injection path.
+**Execute .jar bootstrap:** The JAR now declares `Main-Class: dev.hamilo.client.HamiloAgent` and includes a Java 8-compatible `main(String[])` entry point, in addition to `PreMain-Class` and the standard Java-agent entries. This supports launchers that execute the JAR entry point inside the Minecraft JVM (or otherwise expose the live game's class loaders to it).
 
-This is an injected client JAR, not a Fabric mod JAR. It does not require Fabric API. The manifest includes `PreMain-Class` for Pojav-style injection and the standard Java-agent keys for compatible launchers. Runtime behavior still depends on the specific launcher build and Minecraft class mappings.
+A standalone `java -jar` process cannot inject into a different Minecraft process just because the manifest contains `Main-Class`. The launcher's **Execute .jar** implementation must run the entry point in the game process or provide a real attach/injection bridge. If Pojav reports that its Execute .jar feature is incompatible with Java 21, this JAR change cannot override that launcher limitation. The bootstrap change is not yet verified against your exact Pojav build.
+
+This is an injected client JAR, not a Fabric mod JAR. It does not require Fabric API. The GUI toggles with **Right Shift** once the bootstrap can see the running Minecraft client.
 
 ## Download from GitHub Actions
 
 1. Open the repository's **Actions** tab and select the latest successful build.
 2. Download the `hamilo-client-injectable-jar` artifact.
 3. Extract the downloaded ZIP archive.
-4. Select the `.jar` file inside it in **Inject .jar**. Do not select the artifact ZIP.
+4. Use the launcher's JAR execution/injection option supported by your Pojav build. Do not select the artifact ZIP.
 
 GitHub Actions wraps artifacts in ZIP archives; the actual JAR is inside.
 

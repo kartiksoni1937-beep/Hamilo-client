@@ -24,6 +24,11 @@ public final class HamiloAgent {
 
     private HamiloAgent() {}
 
+    /** Entry point for launchers that execute this JAR's Main-Class in the game JVM. */
+    public static void main(String[] args) {
+        start(null);
+    }
+
     public static void premain(String args) {
         start(null);
     }
@@ -92,7 +97,9 @@ public final class HamiloAgent {
                 error.printStackTrace(System.err);
             }
         }, "Hamilo-Agent-Bootstrap");
-        worker.setDaemon(true);
+        // Keep the Execute .jar JVM alive while the bootstrap waits for Minecraft.
+        // A daemon-only worker is terminated as soon as main() returns.
+        worker.setDaemon(false);
         worker.start();
     }
 
