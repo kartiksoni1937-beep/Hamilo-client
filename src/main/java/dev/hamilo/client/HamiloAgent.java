@@ -97,7 +97,9 @@ public final class HamiloAgent {
                 error.printStackTrace(System.err);
             }
         }, "Hamilo-Agent-Bootstrap");
-        worker.setDaemon(true);
+        // Keep the Execute .jar JVM alive while the bootstrap waits for Minecraft.
+        // A daemon-only worker is terminated as soon as main() returns.
+        worker.setDaemon(false);
         worker.start();
     }
 
