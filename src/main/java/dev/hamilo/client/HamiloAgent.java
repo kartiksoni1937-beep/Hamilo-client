@@ -24,11 +24,52 @@ public final class HamiloAgent {
 
     private HamiloAgent() {}
 
-    /** Entry point for launchers that execute this JAR's Main-Class in the game JVM. */
+    /**
+     * Pojav Execute .jar runs in its own JVM. Use that launch to install the
+     * same combined Fabric/JAR artifact automatically; the in-game entrypoint
+     * then runs in Minecraft's JVM on the next launch.
+     */
     public static void main(String[] args) {
-        // Execute .jar starts a standalone JVM in Pojav, not the Minecraft JVM.
-        // Show a window immediately rather than polling for classes in another process.
-        launchStandaloneGui();
+        try {
+            java.io.File source = new java.io.File(
+                    HamiloAgent.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            if (!source.isFile() || !source.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".jar")) {
+                throw new java.io.IOException("Run Hamilo from its packaged JAR.");
+            }
+
+            java.io.File home = new java.io.File(System.getProperty("user.home", ""));
+            java.io.File cwd = new java.io.File(System.getProperty("user.dir", ""));
+            java.io.File[] roots = {
+                    new java.io.File(home, ".minecraft"),
+                    new java.io.File(cwd, ".minecraft"),
+                    new java.io.File("/storage/emulated/0/games/PojavLauncher/.minecraft"),
+                    new java.io.File("/storage/emulated/0/Android/data/net.kdt.pojavlaunch/files/.minecraft")
+            };
+            java.io.File mods = null;
+            for (java.io.File root : roots) {
+                if (root.isDirectory() && new java.io.File(root, "versions").exists()) {
+                    mods = new java.io.File(root, "mods");
+                    break;
+                }
+            }
+            if (mods == null) {
+                throw new java.io.IOException("Could not find Pojav's .minecraft folder. "
+                        + "Open Pojav once and ensure storage access is granted.");
+            }
+            if (!mods.exists() && !mods.mkdirs()) {
+                throw new java.io.IOException("Could not create mods folder: " + mods);
+            }
+            java.io.File target = new java.io.File(mods, "hamilo-client.jar");
+            if (!source.getCanonicalFile().equals(target.getCanonicalFile())) {
+                java.nio.file.Files.copy(source.toPath(), target.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            System.out.println("[Hamilo] Installed to " + target.getAbsolutePath());
+            System.out.println("[Hamilo] Launch your Fabric 1.21 profile; press Right Shift in-game.");
+        } catch (Throwable error) {
+            System.err.println("[Hamilo] Automatic install failed: " + error.getMessage());
+            error.printStackTrace(System.err);
+        }
     }
 
     private static void launchStandaloneGui() {
