@@ -1,5 +1,7 @@
 package dev.hamilo.client;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Field;
@@ -124,7 +126,7 @@ public final class HamiloAgent {
                     throw new ClassNotFoundException(
                             "GUI class resource is missing from the injected JAR", notVisibleToGameLoader);
                 }
-                byte[] bytes = input.readAllBytes();
+                byte[] bytes = readAllBytes(input);
                 class ScreenClassLoader extends ClassLoader {
                     ScreenClassLoader(ClassLoader parent) {
                         super(parent);
@@ -137,6 +139,18 @@ public final class HamiloAgent {
                 return new ScreenClassLoader(gameLoader).defineScreen(bytes);
             }
         }
+    }
+
+
+    /** Java 8-compatible stream reader; the injected bootstrap is built for broad loader compatibility. */
+    private static byte[] readAllBytes(InputStream input) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int count;
+        while ((count = input.read(buffer)) != -1) {
+            output.write(buffer, 0, count);
+        }
+        return output.toByteArray();
     }
 
     private static boolean isMinecraftClass(String name) {
