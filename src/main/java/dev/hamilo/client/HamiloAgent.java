@@ -26,7 +26,47 @@ public final class HamiloAgent {
 
     /** Entry point for launchers that execute this JAR's Main-Class in the game JVM. */
     public static void main(String[] args) {
-        start(null);
+        // Execute .jar starts a standalone JVM in Pojav, not the Minecraft JVM.
+        // Show a window immediately rather than polling for classes in another process.
+        launchStandaloneGui();
+    }
+
+    private static void launchStandaloneGui() {
+        try {
+            javax.swing.SwingUtilities.invokeLater(() -> {
+                javax.swing.JFrame frame = new javax.swing.JFrame("Hamilo Client");
+                frame.setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
+                frame.setSize(360, 240);
+                frame.setLocationRelativeTo(null);
+                frame.setLayout(new java.awt.BorderLayout(12, 12));
+
+                javax.swing.JLabel title = new javax.swing.JLabel("Hamilo Client", javax.swing.SwingConstants.CENTER);
+                title.setFont(title.getFont().deriveFont(java.awt.Font.BOLD, 22f));
+                frame.add(title, java.awt.BorderLayout.NORTH);
+
+                javax.swing.JTextArea info = new javax.swing.JTextArea(
+                        "Hamilo started successfully.\\n\\n" +
+                        "Execute .jar runs separately from Minecraft.\\n" +
+                        "A standalone JAR cannot inject into another JVM.\\n" +
+                        "The in-game GUI still requires Fabric or a launcher-side agent hook.");
+                info.setEditable(false);
+                info.setOpaque(false);
+                info.setLineWrap(true);
+                info.setWrapStyleWord(true);
+                info.setBorder(javax.swing.BorderFactory.createEmptyBorder(12, 16, 12, 16));
+                frame.add(info, java.awt.BorderLayout.CENTER);
+
+                javax.swing.JButton close = new javax.swing.JButton("Close");
+                close.addActionListener(event -> frame.dispose());
+                javax.swing.JPanel footer = new javax.swing.JPanel();
+                footer.add(close);
+                frame.add(footer, java.awt.BorderLayout.SOUTH);
+                frame.setVisible(true);
+            });
+        } catch (Throwable error) {
+            System.err.println("[Hamilo] Could not open standalone GUI:");
+            error.printStackTrace(System.err);
+        }
     }
 
     public static void premain(String args) {
