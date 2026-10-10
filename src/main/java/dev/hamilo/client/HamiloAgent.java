@@ -59,6 +59,8 @@ public final class HamiloAgent {
                 Method getKey = glfw.getMethod("glfwGetKey", long.class, int.class);
                 Method setScreen = findMethod(minecraftClass,
                         new String[]{"method_1507", "setScreen"}, 1);
+                Method execute = findMethod(minecraftClass,
+                        new String[]{"method_18859", "execute"}, 1);
                 Class<?> screenClass = loadScreenClass(gameLoader);
                 Field screenField = findField(minecraftClass,
                         "field_1755", "currentScreen");
@@ -69,10 +71,18 @@ public final class HamiloAgent {
                     int state = ((Number) getKey.invoke(null, window, 344)).intValue();
                     boolean down = state == 1;
                     if (down && !wasDown) {
-                        Object current = screenField.get(minecraft);
-                        Object next = current != null && screenClass.isInstance(current)
-                                ? null : screenClass.getDeclaredConstructor().newInstance();
-                        setScreen.invoke(minecraft, next);
+                        // Minecraft screen changes must run on the client thread.
+                        execute.invoke(minecraft, (Runnable) () -> {
+                            try {
+                                Object current = screenField.get(minecraft);
+                                Object next = current != null && screenClass.isInstance(current)
+                                        ? null : screenClass.getDeclaredConstructor().newInstance();
+                                setScreen.invoke(minecraft, next);
+                            } catch (Throwable error) {
+                                System.err.println("[Hamilo] Could not toggle GUI:");
+                                error.printStackTrace(System.err);
+                            }
+                        });
                     }
                     wasDown = down;
                     Thread.sleep(16L);
