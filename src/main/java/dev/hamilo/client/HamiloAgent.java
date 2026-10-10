@@ -25,51 +25,117 @@ public final class HamiloAgent {
     private HamiloAgent() {}
 
     /**
-     * Pojav Execute .jar runs in its own JVM. Use that launch to install the
-     * same combined Fabric/JAR artifact automatically; the in-game entrypoint
-     * then runs in Minecraft's JVM on the next launch.
+     * Execute .jar setup: create an independent Pojav/Fabric profile that loads
+     * Hamilo through Fabric Loader's supported fabric.addMods property. The
+     * JAR is stored outside the mods folder, and the user's normal profile is
+     * left unchanged.
      */
     public static void main(String[] args) {
-        try {
-            java.io.File source = new java.io.File(
-                    HamiloAgent.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-            if (!source.isFile() || !source.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".jar")) {
-                throw new java.io.IOException("Run Hamilo from its packaged JAR.");
-            }
+        javax.swing.SwingUtilities.invokeLater(() -> {
+            try {
+                javax.swing.JFileChooser chooser = new javax.swing.JFileChooser(
+                        new java.io.File(System.getProperty("user.home", "/storage/emulated/0")));
+                chooser.setDialogTitle("Select your Pojav .minecraft folder");
+                chooser.setFileSelectionMode(javax.swing.JFileChooser.DIRECTORIES_ONLY);
+                chooser.setAcceptAllFileFilterUsed(false);
+                if (chooser.showOpenDialog(null) != javax.swing.JFileChooser.APPROVE_OPTION) return;
 
-            java.io.File home = new java.io.File(System.getProperty("user.home", ""));
-            java.io.File cwd = new java.io.File(System.getProperty("user.dir", ""));
-            java.io.File[] roots = {
-                    new java.io.File(home, ".minecraft"),
-                    new java.io.File(cwd, ".minecraft"),
-                    new java.io.File("/storage/emulated/0/games/PojavLauncher/.minecraft"),
-                    new java.io.File("/storage/emulated/0/Android/data/net.kdt.pojavlaunch/files/.minecraft")
-            };
-            java.io.File mods = null;
-            for (java.io.File root : roots) {
-                if (root.isDirectory() && new java.io.File(root, "versions").exists()) {
-                    mods = new java.io.File(root, "mods");
-                    break;
+                java.io.File minecraftDir = chooser.getSelectedFile();
+                java.io.File versionsDir = new java.io.File(minecraftDir, "versions");
+                if (!versionsDir.isDirectory()) {
+                    throw new java.io.IOException("The selected folder has no versions directory. Select .minecraft.");
                 }
+
+                java.util.List<String> profiles = new java.util.ArrayList<>();
+                java.io.File[] dirs = versionsDir.listFiles(java.io.File::isDirectory);
+                if (dirs != null) {
+                    java.util.Arrays.sort(dirs, java.util.Comparator.comparing(java.io.File::getName));
+                    for (java.io.File dir : dirs) {
+                        java.io.File json = new java.io.File(dir, dir.getName() + ".json");
+                        if (!json.isFile()) continue;
+                        String contents = new String(java.nio.file.Files.readAllBytes(json.toPath()),
+                                java.nio.charset.StandardCharsets.UTF_8);
+                        String id = jsonString(contents, "id");
+                        String parent = jsonString(contents, "inheritsFrom");
+                        boolean fabric = (id != null && id.startsWith("fabric-loader-"))
+                                || dir.getName().startsWith("fabric-loader-");
+                        boolean mc121 = "1.21".equals(parent)
+                                || (id != null && id.contains("1.21"))
+                                || dir.getName().contains("1.21");
+                        if (fabric && mc121) profiles.add(dir.getName());
+                    }
+                }
+                if (profiles.isEmpty()) {
+                    throw new java.io.IOException("No Fabric Loader profile for Minecraft 1.21 was found. "
+                            + "Install/launch Fabric 1.21 in Pojav once, then run this JAR again.");
+                }
+
+                javax.swing.JComboBox<String> profilePicker =
+                        new javax.swing.JComboBox<>(profiles.toArray(new String[0]));
+                int choice = javax.swing.JOptionPane.showConfirmDialog(null, profilePicker,
+                        "Choose the existing Fabric 1.21 profile to clone",
+                        javax.swing.JOptionPane.OK_CANCEL_OPTION, javax.swing.JOptionPane.QUESTION_MESSAGE);
+                if (choice != javax.swing.JOptionPane.OK_OPTION) return;
+                String parentId = (String) profilePicker.getSelectedItem();
+                if (parentId == null) throw new java.io.IOException("No Fabric profile was selected.");
+
+                java.io.File source = new java.io.File(
+                        HamiloAgent.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+                if (!source.isFile() || !source.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".jar")) {
+                    throw new java.io.IOException("Run Hamilo from its packaged JAR.");
+                }
+
+                java.io.File hamiloDir = new java.io.File(minecraftDir, "hamilo");
+                if (!hamiloDir.exists() && !hamiloDir.mkdirs()) {
+                    throw new java.io.IOException("Could not create Hamilo profile directory: " + hamiloDir);
+                }
+                java.io.File targetJar = new java.io.File(hamiloDir, "hamilo-client.jar");
+                if (!source.getCanonicalFile().equals(targetJar.getCanonicalFile())) {
+                    java.nio.file.Files.copy(source.toPath(), targetJar.toPath(),
+                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+
+                String profileId = "hamilo-fabric-1.21";
+                java.io.File profileDir = new java.io.File(versionsDir, profileId);
+                if (!profileDir.exists() && !profileDir.mkdirs()) {
+                    throw new java.io.IOException("Could not create profile directory: " + profileDir);
+                }
+                String absoluteJar = targetJar.getAbsolutePath().replace("\\", "\\\\").replace("\"", "\\\"");
+                String json = "{\n"
+                        + "  \"id\": \"" + profileId + "\",\n"
+                        + "  \"inheritsFrom\": \"" + parentId + "\",\n"
+                        + "  \"type\": \"release\",\n"
+                        + "  \"arguments\": {\n"
+                        + "    \"jvm\": [\"-Dfabric.addMods=" + absoluteJar + "\"]\n"
+                        + "  }\n"
+                        + "}\n";
+                java.nio.file.Files.write(new java.io.File(profileDir, profileId + ".json").toPath(),
+                        json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+                javax.swing.JOptionPane.showMessageDialog(null,
+                        "Created separate profile: " + profileId + "\n\n"
+                        + "Hamilo JAR: " + targetJar.getAbsolutePath() + "\n\n"
+                        + "Select \"" + profileId + "\" in Pojav and launch it. "
+                        + "Hamilo is loaded through Fabric Loader's fabric.addMods property; "
+                        + "it is not copied into the mods folder. Press Right Shift in-game.",
+                        "Hamilo Fabric Profile Created", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+                System.out.println("[Hamilo] Created profile " + profileId + " inheriting " + parentId);
+            } catch (Throwable error) {
+                System.err.println("[Hamilo] Profile creation failed: " + error.getMessage());
+                error.printStackTrace(System.err);
+                javax.swing.JOptionPane.showMessageDialog(null,
+                        "Could not create the Hamilo Fabric profile:\n"
+                                + error.getClass().getSimpleName() + ": " + error.getMessage(),
+                        "Hamilo Setup Failed", javax.swing.JOptionPane.ERROR_MESSAGE);
             }
-            if (mods == null) {
-                throw new java.io.IOException("Could not find Pojav's .minecraft folder. "
-                        + "Open Pojav once and ensure storage access is granted.");
-            }
-            if (!mods.exists() && !mods.mkdirs()) {
-                throw new java.io.IOException("Could not create mods folder: " + mods);
-            }
-            java.io.File target = new java.io.File(mods, "hamilo-client.jar");
-            if (!source.getCanonicalFile().equals(target.getCanonicalFile())) {
-                java.nio.file.Files.copy(source.toPath(), target.toPath(),
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            }
-            System.out.println("[Hamilo] Installed to " + target.getAbsolutePath());
-            System.out.println("[Hamilo] Launch your Fabric 1.21 profile; press Right Shift in-game.");
-        } catch (Throwable error) {
-            System.err.println("[Hamilo] Automatic install failed: " + error.getMessage());
-            error.printStackTrace(System.err);
-        }
+        });
+    }
+
+    private static String jsonString(String json, String key) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("\\\"" + java.util.regex.Pattern.quote(key) + "\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"")
+                .matcher(json);
+        return matcher.find() ? matcher.group(1) : null;
     }
 
     private static void launchStandaloneGui() {
