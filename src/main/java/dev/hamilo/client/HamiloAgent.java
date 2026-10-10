@@ -79,11 +79,8 @@ public final class HamiloAgent {
                 String parentId = (String) profilePicker.getSelectedItem();
                 if (parentId == null) throw new java.io.IOException("No Fabric profile was selected.");
 
-                java.io.File source = new java.io.File(
-                        HamiloAgent.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-                if (!source.isFile() || !source.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".jar")) {
-                    throw new java.io.IOException("Run Hamilo from its packaged JAR.");
-                }
+                java.io.File source = locatePackagedJar();
+                if (source == null) return;
 
                 java.io.File hamiloDir = new java.io.File(minecraftDir, "hamilo");
                 if (!hamiloDir.exists() && !hamiloDir.mkdirs()) {
@@ -129,6 +126,46 @@ public final class HamiloAgent {
                         "Hamilo Setup Failed", javax.swing.JOptionPane.ERROR_MESSAGE);
             }
         });
+    }
+
+
+    /**
+     * Some Android/Pojav Execute .jar launchers expose a non-file CodeSource
+     * (or a temporary classes directory). Fall back to asking the user to pick
+     * the actual packaged Hamilo JAR instead of failing with a misleading error.
+     */
+    private static java.io.File locatePackagedJar() throws Exception {
+        try {
+            java.security.CodeSource codeSource =
+                    HamiloAgent.class.getProtectionDomain().getCodeSource();
+            if (codeSource != null && codeSource.getLocation() != null) {
+                java.net.URL location = codeSource.getLocation();
+                if ("file".equalsIgnoreCase(location.getProtocol())) {
+                    java.io.File candidate = new java.io.File(location.toURI());
+                    if (candidate.isFile()
+                            && candidate.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".jar")) {
+                        return candidate;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // Pojav's launcher may not expose a conventional file CodeSource.
+        }
+
+        javax.swing.JFileChooser chooser = new javax.swing.JFileChooser(
+                new java.io.File(System.getProperty("user.home", "/storage/emulated/0")));
+        chooser.setDialogTitle("Select the packaged Hamilo JAR");
+        chooser.setFileSelectionMode(javax.swing.JFileChooser.FILES_ONLY);
+        chooser.setAcceptAllFileFilterUsed(false);
+        chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Hamilo JAR (*.jar)", "jar"));
+        int result = chooser.showOpenDialog(null);
+        if (result != javax.swing.JFileChooser.APPROVE_OPTION) return null;
+        java.io.File selected = chooser.getSelectedFile();
+        if (selected == null || !selected.isFile()
+                || !selected.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".jar")) {
+            throw new java.io.IOException("Select the actual packaged Hamilo .jar file.");
+        }
+        return selected;
     }
 
     private static String jsonString(String json, String key) {
