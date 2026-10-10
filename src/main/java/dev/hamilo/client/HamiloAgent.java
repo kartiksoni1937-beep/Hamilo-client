@@ -48,10 +48,10 @@ public final class HamiloAgent {
                 frame.add(title, java.awt.BorderLayout.NORTH);
 
                 javax.swing.JTextArea info = new javax.swing.JTextArea(
-                        "Hamilo started successfully.\n\n" +
-                        "This window confirms the JAR launched.\n" +
-                        "It does not confirm in-game injection.\n" +
-                        "The selected Minecraft JVM must load the agent for the in-game GUI to appear.");
+                        "This window runs outside Minecraft.\n\n" +
+                        "Execute .jar cannot inject into another running JVM.\n" +
+                        "Install Hamilo as a Fabric mod, then launch your Fabric profile.\n" +
+                        "In-game, press Right Shift to open or close the GUI.");
                 info.setEditable(false);
                 info.setOpaque(false);
                 info.setLineWrap(true);
@@ -59,7 +59,7 @@ public final class HamiloAgent {
                 info.setBorder(javax.swing.BorderFactory.createEmptyBorder(12, 16, 12, 16));
                 frame.add(info, java.awt.BorderLayout.CENTER);
 
-                javax.swing.JButton install = new javax.swing.JButton("Install to Fabric");
+                javax.swing.JButton install = new javax.swing.JButton("Install as Fabric mod");
                 install.addActionListener(event -> installForFabric(frame));
 
                 javax.swing.JButton close = new javax.swing.JButton("Close");
@@ -97,17 +97,20 @@ public final class HamiloAgent {
             java.io.File userDirFile = new java.io.File(userDir);
             java.io.File modsDir = null;
 
-            // Pojav's Execute .jar runtime normally sets user.home to .minecraft.
-            java.io.File[] candidates = {
-                    new java.io.File(homeDir, "mods"),
-                    new java.io.File(userDirFile, "mods"),
-                    new java.io.File(homeDir, ".minecraft/mods")
+            // Only auto-select a mods folder when its parent is demonstrably
+            // a .minecraft directory. Never guess that an arbitrary "mods"
+            // directory is the active Minecraft profile.
+            java.io.File homeMinecraft = new java.io.File(homeDir, ".minecraft");
+            java.io.File[] minecraftRoots = {
+                    homeDir.getName().equals(".minecraft") ? homeDir : null,
+                    userDirFile.getName().equals(".minecraft") ? userDirFile : null,
+                    homeMinecraft,
+                    new java.io.File("/storage/emulated/0/games/PojavLauncher/.minecraft"),
+                    new java.io.File("/storage/emulated/0/Android/data/net.kdt.pojavlaunch/files/.minecraft")
             };
-            for (java.io.File candidate : candidates) {
-                java.io.File parent = candidate.getParentFile();
-                if (parent != null && parent.isDirectory()
-                        && (parent.getName().equals(".minecraft") || candidate.getName().equals("mods"))) {
-                    modsDir = candidate;
+            for (java.io.File root : minecraftRoots) {
+                if (root != null && root.isDirectory()) {
+                    modsDir = new java.io.File(root, "mods");
                     break;
                 }
             }
