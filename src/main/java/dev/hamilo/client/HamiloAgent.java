@@ -49,8 +49,16 @@ public final class HamiloAgent {
                         .invoke(windowObject)).longValue();
                 Method getKey = glfw.getMethod("glfwGetKey", long.class, int.class);
                 Method setScreen = findSetScreen(minecraftClass);
-                Class<?> screenClass = Class.forName(
-                        "dev.hamilo.client.HamiloClickGuiScreen", true, gameLoader);
+                Class<?> screenClass;
+                try {
+                    screenClass = Class.forName(
+                            "dev.hamilo.client.HamiloClickGuiScreen", true, gameLoader);
+                } catch (ClassNotFoundException | LinkageError notVisibleFromGameLoader) {
+                    // Some injectors keep the injected JAR in a separate loader.
+                    screenClass = Class.forName(
+                            "dev.hamilo.client.HamiloClickGuiScreen", true,
+                            HamiloAgent.class.getClassLoader());
+                }
                 Field screenField = findField(minecraftClass, "currentScreen");
 
                 boolean wasDown = false;
