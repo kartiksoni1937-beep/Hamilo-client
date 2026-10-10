@@ -33,8 +33,9 @@ public final class HamiloAgent {
 
                 Object minecraft = minecraftClass.getMethod("getInstance").invoke(null);
                 Class<?> glfw = Class.forName("org.lwjgl.glfw.GLFW");
-                long window = ((Number) minecraftClass.getMethod("getWindow").invoke(minecraft))
-                        .longValue();
+                Object windowObject = minecraftClass.getMethod("getWindow").invoke(minecraft);
+                long window = ((Number) windowObject.getClass().getMethod("getHandle")
+                        .invoke(windowObject)).longValue();
                 java.lang.reflect.Method getKey = glfw.getMethod(
                         "glfwGetKey", long.class, int.class);
                 java.lang.reflect.Method setScreen = findSetScreen(minecraftClass);
@@ -47,7 +48,8 @@ public final class HamiloAgent {
                     int state = ((Number) getKey.invoke(null, window, 344)).intValue();
                     boolean down = state == 1;
                     if (down && !wasDown) {
-                        Object current = minecraftClass.getMethod("currentScreen").invoke(minecraft);
+                        java.lang.reflect.Field screenField = minecraftClass.getField("currentScreen");
+                        Object current = screenField.get(minecraft);
                         Object next = current != null && screenClass.isInstance(current)
                                 ? null : screenClass.getDeclaredConstructor().newInstance();
                         setScreen.invoke(minecraft, next);
