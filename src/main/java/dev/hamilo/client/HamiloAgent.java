@@ -12,8 +12,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Bootstrap for Pojav's PreMain-Class injector and standard Java-agent loaders.
- * Production Fabric runtimes generally expose intermediary Minecraft names,
- * while development environments expose Yarn names; support both.
+ * Waits for the real Minecraft client to finish initializing, then opens Hamilo
+ * automatically and keeps Right Shift as a toggle key.
  */
 public final class HamiloAgent {
     private static final AtomicBoolean STARTED = new AtomicBoolean(false);
@@ -48,18 +48,43 @@ public final class HamiloAgent {
             try {
                 Class<?> minecraftClass = waitForMinecraft(instrumentation);
                 if (minecraftClass == null) {
-                    System.err.println("[Hamilo] Minecraft client class was not found after 60 seconds.");
+                    System.err.println("[Hamilo] Minecraft client class was not found before timeout.");
+                    return;
+                }
+
+                // The class can load well before MinecraftClient and its window are ready.
+                // Do not abort on a temporarily-null singleton during early startup.
+                Object minecraft = null;
+                Object windowObject = null;
+                long window = 0L;
+                Method getWindow = findMethod(minecraftClass,
+                        new String[]{"method_22683", "getWindow"}, 0);
+                Method getInstance = findMethod(minecraftClass,
+                        new String[]{"method_1551", "getInstance"}, 0);
+
+                for (int attempt = 0; attempt < 3000; attempt++) {
+                    try {
+                        minecraft = getInstance.invoke(null);
+                        if (minecraft != null) {
+                            windowObject = getWindow.invoke(minecraft);
+                            if (windowObject != null) {
+                                window = ((Number) invokeNoArgs(windowObject.getClass(),
+                                        windowObject, "method_4490", "getHandle")).longValue();
+                                if (window != 0L) break;
+                            }
+                        }
+                    } catch (Throwable notReadyYet) {
+                        // Minecraft or its window is still being initialized.
+                    }
+                    Thread.sleep(100L);
+                }
+
+                if (minecraft == null || windowObject == null || window == 0L) {
+                    System.err.println("[Hamilo] Minecraft loaded, but its client window never became ready.");
                     return;
                 }
 
                 ClassLoader gameLoader = minecraftClass.getClassLoader();
-                Object minecraft = invokeStaticNoArgs(minecraftClass,
-                        "method_1551", "getInstance");
-                Object windowObject = invokeNoArgs(minecraftClass, minecraft,
-                        "method_22683", "getWindow");
-                long window = ((Number) invokeNoArgs(windowObject.getClass(), windowObject,
-                        "method_4490", "getHandle")).longValue();
-
                 Class<?> glfw = Class.forName("org.lwjgl.glfw.GLFW", true, gameLoader);
                 Method getKey = glfw.getMethod("glfwGetKey", long.class, int.class);
                 Method setScreen = findMethod(minecraftClass,
@@ -70,19 +95,30 @@ public final class HamiloAgent {
                 Field screenField = findField(minecraftClass,
                         "field_1755", "currentScreen");
 
+                // Show the GUI automatically as soon as the actual game client is ready.
+                final Object readyMinecraft = minecraft;
+                execute.invoke(minecraft, (Runnable) () -> {
+                    try {
+                        setScreen.invoke(readyMinecraft,
+                                screenClass.getDeclaredConstructor().newInstance());
+                    } catch (Throwable error) {
+                        System.err.println("[Hamilo] Could not open GUI automatically:");
+                        error.printStackTrace(System.err);
+                    }
+                });
+
                 boolean wasDown = false;
-                System.out.println("[Hamilo] Injected. Press Right Shift to toggle the GUI.");
+                System.out.println("[Hamilo] Loaded into Minecraft. GUI opened; press Right Shift to toggle it.");
                 while (!Thread.currentThread().isInterrupted()) {
                     int state = ((Number) getKey.invoke(null, window, 344)).intValue();
                     boolean down = state == 1;
                     if (down && !wasDown) {
-                        // Minecraft screen changes must run on the client thread.
                         execute.invoke(minecraft, (Runnable) () -> {
                             try {
-                                Object current = screenField.get(minecraft);
+                                Object current = screenField.get(readyMinecraft);
                                 Object next = current != null && screenClass.isInstance(current)
                                         ? null : screenClass.getDeclaredConstructor().newInstance();
-                                setScreen.invoke(minecraft, next);
+                                setScreen.invoke(readyMinecraft, next);
                             } catch (Throwable error) {
                                 System.err.println("[Hamilo] Could not toggle GUI:");
                                 error.printStackTrace(System.err);
@@ -98,14 +134,13 @@ public final class HamiloAgent {
             }
         }, "Hamilo-Agent-Bootstrap");
         // Keep the Execute .jar JVM alive while the bootstrap waits for Minecraft.
-        // A daemon-only worker is terminated as soon as main() returns.
         worker.setDaemon(false);
         worker.start();
     }
 
     private static Class<?> waitForMinecraft(Instrumentation instrumentation)
             throws InterruptedException {
-        for (int attempt = 0; attempt < 600; attempt++) {
+        for (int attempt = 0; attempt < 3000; attempt++) {
             if (instrumentation != null) {
                 for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
                     if (isMinecraftClass(loaded.getName())) return loaded;
@@ -127,10 +162,9 @@ public final class HamiloAgent {
     }
 
     /**
-     * Pojav can load the injected agent in a loader that is separate from the
-     * Minecraft game loader. Define the GUI class in a child of the game loader
-     * so its Minecraft superclass and method signatures resolve against the
-     * live game classes, while obtaining the class bytes from the injected JAR.
+     * If the launcher loads the agent in a loader separate from Minecraft,
+     * define the GUI in a child of the game loader so its Minecraft superclass
+     * and method signatures resolve against the live game classes.
      */
     private static Class<?> loadScreenClass(ClassLoader gameLoader) throws Exception {
         String className = "dev.hamilo.client.HamiloClickGuiScreen";
@@ -158,8 +192,7 @@ public final class HamiloAgent {
         }
     }
 
-
-    /** Java 8-compatible stream reader; the injected bootstrap is built for broad loader compatibility. */
+    /** Java 8-compatible stream reader for broad injector compatibility. */
     private static byte[] readAllBytes(InputStream input) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         byte[] buffer = new byte[8192];
@@ -193,11 +226,6 @@ public final class HamiloAgent {
         for (ClassLoader current = loader; current != null; current = current.getParent()) {
             loaders.add(current);
         }
-    }
-
-    private static Object invokeStaticNoArgs(Class<?> type, String... names)
-            throws ReflectiveOperationException {
-        return findMethod(type, names, 0).invoke(null);
     }
 
     private static Object invokeNoArgs(Class<?> type, Object target, String... names)
