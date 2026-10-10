@@ -1,5 +1,6 @@
 package dev.hamilo.client;
 
+import java.io.InputStream;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -56,8 +57,7 @@ public final class HamiloAgent {
                 Method getKey = glfw.getMethod("glfwGetKey", long.class, int.class);
                 Method setScreen = findMethod(minecraftClass,
                         new String[]{"method_1507", "setScreen"}, 1);
-                Class<?> screenClass = Class.forName(
-                        "dev.hamilo.client.HamiloClickGuiScreen", true, gameLoader);
+                Class<?> screenClass = loadScreenClass(gameLoader);
                 Field screenField = findField(minecraftClass,
                         "field_1755", "currentScreen");
 
@@ -105,6 +105,38 @@ public final class HamiloAgent {
             Thread.sleep(100L);
         }
         return null;
+    }
+
+    /**
+     * Pojav can load the injected agent in a loader that is separate from the
+     * Minecraft game loader. Define the GUI class in a child of the game loader
+     * so its Minecraft superclass and method signatures resolve against the
+     * live game classes, while obtaining the class bytes from the injected JAR.
+     */
+    private static Class<?> loadScreenClass(ClassLoader gameLoader) throws Exception {
+        String className = "dev.hamilo.client.HamiloClickGuiScreen";
+        try {
+            return Class.forName(className, true, gameLoader);
+        } catch (ClassNotFoundException notVisibleToGameLoader) {
+            try (InputStream input = HamiloAgent.class.getResourceAsStream(
+                    "/dev/hamilo/client/HamiloClickGuiScreen.class")) {
+                if (input == null) {
+                    throw new ClassNotFoundException(
+                            "GUI class resource is missing from the injected JAR", notVisibleToGameLoader);
+                }
+                byte[] bytes = input.readAllBytes();
+                class ScreenClassLoader extends ClassLoader {
+                    ScreenClassLoader(ClassLoader parent) {
+                        super(parent);
+                    }
+
+                    Class<?> defineScreen(byte[] classBytes) {
+                        return defineClass(className, classBytes, 0, classBytes.length);
+                    }
+                }
+                return new ScreenClassLoader(gameLoader).defineScreen(bytes);
+            }
+        }
     }
 
     private static boolean isMinecraftClass(String name) {
