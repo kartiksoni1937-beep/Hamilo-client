@@ -22,7 +22,7 @@ jobs:
           gradle-version: '8.10'
       - name: Build injectable JAR
         run: gradle build
-      - name: Verify injection manifest
+      - name: Verify injection manifest and bootstrap bytecode
         shell: bash
         run: |
           set -euo pipefail
@@ -37,23 +37,8 @@ jobs:
           unzip -p "$JAR" META-INF/MANIFEST.MF | tr -d '\r' | tee /tmp/hamilo-manifest.txt
           grep -Eiq '^PreMain-Class: dev\.hamilo\.client\.HamiloAgent$' /tmp/hamilo-manifest.txt
           grep -Eiq '^Premain-Class: dev\.hamilo\.client\.HamiloAgent$' /tmp/hamilo-manifest.txt
-          grep -Eiq '^Agent-Class: dev\.hamilo\.client\.HamiloAgent
-      - name: Upload injectable JAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: hamilo-client-injectable-jar
-          path: ${{ env.HAMILO_JAR_PATH }}
-          if-no-files-found: error
- /tmp/hamilo-manifest.txt
-          grep -Eiq '^Main-Class: dev\\.hamilo\\.client\\.HamiloAgent
-      - name: Upload injectable JAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: hamilo-client-injectable-jar
-          path: ${{ env.HAMILO_JAR_PATH }}
-          if-no-files-found: error
- /tmp/hamilo-manifest.txt
-          # Verify the bootstrap can load on Java 8-era launcher runtimes (class major 52).
+          grep -Eiq '^Agent-Class: dev\.hamilo\.client\.HamiloAgent$' /tmp/hamilo-manifest.txt
+          grep -Eiq '^Main-Class: dev\.hamilo\.client\.HamiloAgent$' /tmp/hamilo-manifest.txt
           javap -verbose -classpath "$JAR" dev.hamilo.client.HamiloAgent | grep -q 'major version: 52'
       - name: Upload injectable JAR
         uses: actions/upload-artifact@v4
