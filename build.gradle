@@ -55,6 +55,9 @@ jar {
 
     manifest {
         attributes(
+            // Execute .jar launchers invoke Main-Class; it can only see the game
+            // when the launcher runs it in the same JVM/class-loader context.
+            'Main-Class': 'dev.hamilo.client.HamiloAgent',
             // Pojav-style loader injection reads this custom manifest key.
             'PreMain-Class': 'dev.hamilo.client.HamiloAgent',
             // Keep standard Java-agent keys for compatible launchers too.
