@@ -21,9 +21,9 @@ public final class HamiloClickGuiScreen extends Screen {
         context.fill(left, top, left + panelWidth, top + panelHeight, 0xE91A1D24);
         context.fill(left, top, left + panelWidth, top + 2, 0xFF7C5CFF);
         context.drawText(this.textRenderer, Text.literal("Hamilo Client"), left + 12, top + 12, 0xFFFFFFFF, false);
-        context.drawText(this.textRenderer, Text.literal("Java-agent injection build"), left + 12, top + 32, 0xFFB9BBC6, false);
-        context.drawText(this.textRenderer, Text.literal("Client GUI is running."), left + 12, top + 52, 0xFFE2E3EA, false);
-        context.drawText(this.textRenderer, Text.literal("Press ESC to close"), left + 12, top + 92, 0xFFB9BBC6, false);
+        context.drawText(this.textRenderer, Text.literal("Right Shift toggles this GUI"), left + 12, top + 32, 0xFFB9BBC6, false);
+        context.drawText(this.textRenderer, Text.literal("Hamilo is loaded in-game."), left + 12, top + 52, 0xFFE2E3EA, false);
+        context.drawText(this.textRenderer, Text.literal("Press ESC or Right Shift to close"), left + 12, top + 92, 0xFFB9BBC6, false);
 
         super.render(context, mouseX, mouseY, delta);
     }
