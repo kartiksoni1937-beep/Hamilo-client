@@ -23,14 +23,24 @@ jobs:
       - name: Build injectable JAR
         run: gradle build
       - name: Verify injection manifest
+        shell: bash
         run: |
-          test -f build/libs/hamilo-client-1.0.0.jar
-          unzip -p build/libs/hamilo-client-1.0.0.jar META-INF/MANIFEST.MF | grep -q 'PreMain-Class: dev.hamilo.client.HamiloAgent'
-          unzip -p build/libs/hamilo-client-1.0.0.jar META-INF/MANIFEST.MF | grep -q 'Premain-Class: dev.hamilo.client.HamiloAgent'
-          unzip -p build/libs/hamilo-client-1.0.0.jar META-INF/MANIFEST.MF | grep -q 'Agent-Class: dev.hamilo.client.HamiloAgent'
+          set -euo pipefail
+          JAR="$(find build/libs -maxdepth 1 -type f -name 'hamilo-client-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | sort | head -n 1)"
+          if [[ -z "$JAR" ]]; then
+            echo "No main Hamilo client JAR found in build/libs. Contents:"
+            find build/libs -maxdepth 1 -type f -print || true
+            exit 1
+          fi
+          echo "Checking $JAR"
+          echo "HAMILO_JAR_PATH=$JAR" >> "$GITHUB_ENV"
+          unzip -p "$JAR" META-INF/MANIFEST.MF | tr -d '\r' | tee /tmp/hamilo-manifest.txt
+          grep -Eiq '^PreMain-Class: dev\.hamilo\.client\.HamiloAgent$' /tmp/hamilo-manifest.txt
+          grep -Eiq '^Premain-Class: dev\.hamilo\.client\.HamiloAgent$' /tmp/hamilo-manifest.txt
+          grep -Eiq '^Agent-Class: dev\.hamilo\.client\.HamiloAgent$' /tmp/hamilo-manifest.txt
       - name: Upload injectable JAR
         uses: actions/upload-artifact@v4
         with:
           name: hamilo-client-injectable-jar
-          path: build/libs/hamilo-client-1.0.0.jar
+          path: ${{ env.HAMILO_JAR_PATH }}
           if-no-files-found: error
