@@ -1,18 +1,14 @@
 package dev.hamilo.client;
 
 import java.lang.instrument.Instrumentation;
-import java.net.URL;
-import java.net.URLClassLoader;
-import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Experimental entry point for launchers that invoke a Java agent when injecting a JAR.
- * The regular Fabric entry point remains supported.
+ * Experimental standalone agent bootstrap. This intentionally does not implement
+ * Fabric's ClientModInitializer and does not require fabric.mod.json.
  */
 public final class HamiloAgent {
     private static final AtomicBoolean STARTED = new AtomicBoolean(false);
-    private static volatile URLClassLoader injectedLoader;
 
     private HamiloAgent() {}
 
@@ -25,48 +21,69 @@ public final class HamiloAgent {
     }
 
     private static void start(Instrumentation instrumentation) {
-        if (!STARTED.compareAndSet(false, true)) {
-            return;
-        }
+        if (!STARTED.compareAndSet(false, true)) return;
 
         Thread worker = new Thread(() -> {
             try {
-                ClassLoader gameLoader = waitForGameLoader(instrumentation);
-                if (gameLoader == null) {
-                    System.err.println("[Hamilo] MinecraftClient was not found; agent bootstrap stopped.");
+                Class<?> minecraftClass = waitForMinecraft(instrumentation);
+                if (minecraftClass == null) {
+                    System.err.println("[Hamilo] Minecraft was not detected; agent stopped.");
                     return;
                 }
 
-                URL jarUrl = Path.of(HamiloAgent.class.getProtectionDomain()
-                        .getCodeSource().getLocation().toURI()).toUri().toURL();
-                injectedLoader = new URLClassLoader(new URL[]{jarUrl}, gameLoader);
+                Object minecraft = minecraftClass.getMethod("getInstance").invoke(null);
+                Class<?> glfw = Class.forName("org.lwjgl.glfw.GLFW");
+                long window = ((Number) minecraftClass.getMethod("getWindow").invoke(minecraft))
+                        .longValue();
+                java.lang.reflect.Method getKey = glfw.getMethod(
+                        "glfwGetKey", long.class, int.class);
+                java.lang.reflect.Method setScreen = findSetScreen(minecraftClass);
+                Class<?> screenClass = Class.forName("dev.hamilo.client.HamiloClickGuiScreen",
+                        true, HamiloAgent.class.getClassLoader());
 
-                Class<?> entrypoint = Class.forName(
-                        "dev.hamilo.client.HamiloClient", true, injectedLoader);
-                Object instance = entrypoint.getDeclaredConstructor().newInstance();
-                entrypoint.getMethod("onInitializeClient").invoke(instance);
-                System.out.println("[Hamilo] Agent bootstrap initialized the client entry point.");
+                boolean wasDown = false;
+                System.out.println("[Hamilo] Agent loaded. Press Right Shift to toggle the GUI.");
+                while (!Thread.currentThread().isInterrupted()) {
+                    int state = ((Number) getKey.invoke(null, window, 344)).intValue();
+                    boolean down = state == 1;
+                    if (down && !wasDown) {
+                        Object current = minecraftClass.getMethod("currentScreen").invoke(minecraft);
+                        Object next = current != null && screenClass.isInstance(current)
+                                ? null : screenClass.getDeclaredConstructor().newInstance();
+                        setScreen.invoke(minecraft, next);
+                    }
+                    wasDown = down;
+                    Thread.sleep(16L);
+                }
             } catch (Throwable error) {
                 System.err.println("[Hamilo] Agent bootstrap failed:");
                 error.printStackTrace(System.err);
             }
         }, "Hamilo-Agent-Bootstrap");
-
         worker.setDaemon(true);
         worker.start();
     }
 
-    private static ClassLoader waitForGameLoader(Instrumentation instrumentation)
+    private static Class<?> waitForMinecraft(Instrumentation instrumentation)
             throws InterruptedException {
-        // Minecraft may not have loaded yet when premain runs.
         for (int attempt = 0; attempt < 600; attempt++) {
             for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
                 if ("net.minecraft.client.MinecraftClient".equals(loaded.getName())) {
-                    return loaded.getClassLoader();
+                    return loaded;
                 }
             }
             Thread.sleep(100L);
         }
         return null;
+    }
+
+    private static java.lang.reflect.Method findSetScreen(Class<?> minecraftClass)
+            throws NoSuchMethodException {
+        for (java.lang.reflect.Method method : minecraftClass.getMethods()) {
+            if (method.getName().equals("setScreen") && method.getParameterCount() == 1) {
+                return method;
+            }
+        }
+        throw new NoSuchMethodException("MinecraftClient.setScreen");
     }
 }
