@@ -31,6 +31,9 @@ java {
 jar {
     manifest {
         attributes(
+            // Pojav-style loader injection reads this custom manifest key.
+            'PreMain-Class': 'dev.hamilo.client.HamiloAgent',
+            // Keep standard Java-agent keys for compatible launchers too.
             'Premain-Class': 'dev.hamilo.client.HamiloAgent',
             'Agent-Class': 'dev.hamilo.client.HamiloAgent',
             'Can-Redefine-Classes': 'false',
