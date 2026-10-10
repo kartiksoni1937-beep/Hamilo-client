@@ -18,8 +18,29 @@ dependencies {
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
 }
 
+// Pojav's PreMain-Class injector is modeled on its Java 8-compatible injector
+// entrypoint. Keep the bootstrap bytecode Java 8-compatible while the GUI,
+// which links against Minecraft 1.21 classes, stays on Java 21.
+sourceSets {
+    main {
+        java {
+            exclude 'dev/hamilo/client/HamiloAgent.java'
+        }
+    }
+    agent {
+        java {
+            srcDir 'src/main/java'
+            include 'dev/hamilo/client/HamiloAgent.java'
+        }
+    }
+}
+
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 21
+}
+
+tasks.named('compileAgentJava', JavaCompile).configure {
+    options.release = 8
 }
 
 java {
@@ -29,6 +50,9 @@ java {
 }
 
 jar {
+    // Package the Java 8 bootstrap beside the Java 21 Minecraft GUI classes.
+    from(sourceSets.agent.output)
+
     manifest {
         attributes(
             // Pojav-style loader injection reads this custom manifest key.
