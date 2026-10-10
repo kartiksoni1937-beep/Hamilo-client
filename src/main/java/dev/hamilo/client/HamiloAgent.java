@@ -32,11 +32,14 @@ public final class HamiloAgent {
     }
 
     private static void launchStandaloneGui() {
+        // Execute .jar uses Pojav's AWT/Caciocavallo runtime. Build the window
+        // synchronously so startup errors are reported instead of disappearing
+        // on the Swing event thread with no visible diagnostic.
         try {
-            javax.swing.SwingUtilities.invokeLater(() -> {
+            javax.swing.SwingUtilities.invokeAndWait(() -> {
                 javax.swing.JFrame frame = new javax.swing.JFrame("Hamilo Client");
                 frame.setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
-                frame.setSize(360, 240);
+                frame.setSize(380, 260);
                 frame.setLocationRelativeTo(null);
                 frame.setLayout(new java.awt.BorderLayout(12, 12));
 
@@ -45,10 +48,10 @@ public final class HamiloAgent {
                 frame.add(title, java.awt.BorderLayout.NORTH);
 
                 javax.swing.JTextArea info = new javax.swing.JTextArea(
-                        "Hamilo started successfully.\\n\\n" +
-                        "Execute .jar runs separately from Minecraft.\\n" +
-                        "A standalone JAR cannot inject into another JVM.\\n" +
-                        "The in-game GUI still requires Fabric or a launcher-side agent hook.");
+                        "Hamilo started successfully.\n\n" +
+                        "This window confirms the JAR launched.\n" +
+                        "It does not confirm in-game injection.\n" +
+                        "The selected Minecraft JVM must load the agent for the in-game GUI to appear.");
                 info.setEditable(false);
                 info.setOpaque(false);
                 info.setLineWrap(true);
@@ -62,9 +65,10 @@ public final class HamiloAgent {
                 footer.add(close);
                 frame.add(footer, java.awt.BorderLayout.SOUTH);
                 frame.setVisible(true);
+                frame.toFront();
             });
         } catch (Throwable error) {
-            System.err.println("[Hamilo] Could not open standalone GUI:");
+            System.err.println("[Hamilo] Standalone GUI startup failed:");
             error.printStackTrace(System.err);
         }
     }
