@@ -39,6 +39,12 @@ java {
 }
 
 jar {
+    manifest {
+        attributes(
+            'Premain-Class': 'dev.hamilo.client.HamiloAgent',
+            'Agent-Class': 'dev.hamilo.client.HamiloAgent'
+        )
+    }
     from('LICENSE') {
         rename { "${it}_${project.base.archivesName.get()}" }
     }
