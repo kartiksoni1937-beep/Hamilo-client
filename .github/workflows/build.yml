@@ -20,10 +20,16 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10'
-      - name: Build mod
+      - name: Build agent JAR
         run: gradle build
-      - name: Upload mod JAR
+      - name: Verify agent manifest
+        run: |
+          test -f build/libs/hamilo-client-1.0.0.jar
+          unzip -p build/libs/hamilo-client-1.0.0.jar META-INF/MANIFEST.MF | grep -q 'Premain-Class: dev.hamilo.client.HamiloAgent'
+          unzip -p build/libs/hamilo-client-1.0.0.jar META-INF/MANIFEST.MF | grep -q 'Agent-Class: dev.hamilo.client.HamiloAgent'
+      - name: Upload agent JAR
         uses: actions/upload-artifact@v4
         with:
           name: hamilo-client-jar
-          path: build/libs/*.jar
+          path: build/libs/hamilo-client-1.0.0.jar
+          if-no-files-found: error
