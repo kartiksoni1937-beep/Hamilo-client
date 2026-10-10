@@ -1,56 +1,45 @@
 # Hamilo Client
 
-Hamilo Client is a client-side Minecraft Java Edition 1.21 client built as a Fabric JAR. The same artifact can be used on Windows and Android launchers such as PojavLauncher when the selected Minecraft, Java, Fabric Loader, and device configuration are compatible.
+Hamilo Client is an experimental Minecraft Java Edition 1.21 client GUI packaged as a Java agent JAR for launchers that explicitly support loading/injecting Java agent JARs.
 
 ## Current features
 
-- Press **Right Shift** to open the Hamilo Client GUI.
+- Press **Right Shift** to toggle the Hamilo Client GUI.
 - Press **Escape** to close the GUI.
 - The GUI does not pause single-player gameplay.
-- GitHub Actions builds the project and uploads the compiled JAR as a workflow artifact.
+- GitHub Actions builds the agent JAR.
 
-## Requirements
+## Compatibility
 
 - Minecraft Java Edition 1.21
-- Fabric Loader 0.16.5 or newer
-- Fabric API for Minecraft 1.21
 - Java 21
-- Gradle 8.10 or compatible
+- A launcher/runtime that supports this JAR's Java-agent entry point and compatible class/mapping access
 
-## Build
+**Important:** A Java agent JAR is not the same as a Fabric mod JAR. This project no longer requires a Fabric profile or Fabric API. However, Java-agent support varies by launcher. Pojav's “Inject .jar” option must support Java instrumentation agents for this artifact to work; the manifest alone cannot add that capability. If Pojav reports that it cannot read the file, make sure you selected the actual `.jar`, not the downloaded GitHub Actions artifact `.zip`.
 
-From the repository root, run:
+## Download from GitHub Actions
+
+1. Open the repository's **Actions** tab and select a successful build.
+2. Download the `hamilo-client-jar` artifact.
+3. Extract the downloaded ZIP archive.
+4. Select the contained `hamilo-client-1.0.0.jar` file in the launcher's injection option. Do not rename or select the ZIP itself.
+
+The artifact is a ZIP because GitHub Actions wraps uploaded artifacts in ZIP archives; the JAR is inside it.
+
+## Build locally
+
+Use Java 21 and Gradle 8.10:
 
 ```sh
 gradle build
 ```
 
-The compiled JAR will be in `build/libs/`.
+The agent JAR is written to `build/libs/hamilo-client-1.0.0.jar`.
 
-## Install on Windows
+## Loading model and limitations
 
-1. Create or select a Minecraft 1.21 Fabric profile with Java 21.
-2. Download the `hamilo-client-jar` artifact from a successful GitHub Actions build, or build it locally.
-3. Place the Hamilo Client JAR in that profile's `mods` folder.
-4. Ensure Fabric API for Minecraft 1.21 is also in the `mods` folder, then launch that Fabric profile.
-
-## Install on Android with PojavLauncher
-
-1. Create or select a Minecraft 1.21 Fabric installation in PojavLauncher and use a compatible Java 21 runtime.
-2. Download the same `hamilo-client-jar` artifact.
-3. Put the JAR in the `mods` folder associated with that PojavLauncher game directory.
-4. Add a compatible Fabric API JAR to the same folder and start the Fabric installation.
-
-PojavLauncher configurations vary by device and runtime. If the game fails to start, check the launcher log for Java, Fabric Loader, or mod-version errors.
+The JAR declares `Premain-Class` and `Agent-Class` in its manifest. This is the Java instrumentation agent mechanism, not Fabric's mod entrypoint. It does not guarantee that a launcher supports injection or that the agent can resolve Minecraft classes in every runtime. The current bootstrap is experimental and must be validated against the exact Pojav version and Minecraft runtime.
 
 ## GitHub Actions
 
-Push a commit or open a pull request to run the build workflow. When the workflow succeeds, download the `hamilo-client-jar` artifact from the workflow run's **Artifacts** section.
-
-## Loading model
-
-Hamilo Client is packaged as a regular Fabric client JAR and loaded by Fabric at game startup. It does not inject code into an already-running Minecraft process. Fabric's normal loading path is the supported way to use the same client artifact on compatible Windows and PojavLauncher installations.
-
-## Notes
-
-This is an initial client GUI scaffold. It does not yet include configurable feature modules.
+Push a commit or manually run the build workflow. Download the `hamilo-client-jar` artifact from a successful run and extract it before selecting the JAR.
