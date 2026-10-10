@@ -24,6 +24,11 @@ public final class HamiloAgent {
 
     private HamiloAgent() {}
 
+    /** Entry point for launchers that execute this JAR's Main-Class in the game JVM. */
+    public static void main(String[] args) {
+        start(null);
+    }
+
     public static void premain(String args) {
         start(null);
     }
