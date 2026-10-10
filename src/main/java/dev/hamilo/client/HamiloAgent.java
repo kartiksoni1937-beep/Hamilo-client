@@ -8,20 +8,23 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Bootstrap compatible with both standard Java-agent loading and launchers
- * that invoke the Pojav-style PreMain-Class entry point directly.
+ * Bootstrap for Pojav's PreMain-Class injector and standard Java-agent loaders.
+ * Production Fabric runtimes generally expose intermediary Minecraft names,
+ * while development environments expose Yarn names; support both.
  */
 public final class HamiloAgent {
     private static final AtomicBoolean STARTED = new AtomicBoolean(false);
+    private static final String[] MINECRAFT_CLASSES = {
+            "net.minecraft.class_310",
+            "net.minecraft.client.MinecraftClient"
+    };
 
     private HamiloAgent() {}
 
-    // Pojav-style custom launcher entry point (does not pass Instrumentation).
     public static void premain(String args) {
         start(null);
     }
 
-    // Standard -javaagent entry point.
     public static void premain(String args, Instrumentation instrumentation) {
         start(instrumentation);
     }
@@ -37,29 +40,26 @@ public final class HamiloAgent {
             try {
                 Class<?> minecraftClass = waitForMinecraft(instrumentation);
                 if (minecraftClass == null) {
-                    System.err.println("[Hamilo] MinecraftClient was not found after 60 seconds.");
+                    System.err.println("[Hamilo] Minecraft client class was not found after 60 seconds.");
                     return;
                 }
 
                 ClassLoader gameLoader = minecraftClass.getClassLoader();
-                Object minecraft = minecraftClass.getMethod("getInstance").invoke(null);
+                Object minecraft = invokeStaticNoArgs(minecraftClass,
+                        "method_1551", "getInstance");
+                Object windowObject = invokeNoArgs(minecraftClass, minecraft,
+                        "method_22683", "getWindow");
+                long window = ((Number) invokeNoArgs(windowObject.getClass(), windowObject,
+                        "method_4490", "getHandle")).longValue();
+
                 Class<?> glfw = Class.forName("org.lwjgl.glfw.GLFW", true, gameLoader);
-                Object windowObject = minecraftClass.getMethod("getWindow").invoke(minecraft);
-                long window = ((Number) windowObject.getClass().getMethod("getHandle")
-                        .invoke(windowObject)).longValue();
                 Method getKey = glfw.getMethod("glfwGetKey", long.class, int.class);
-                Method setScreen = findSetScreen(minecraftClass);
-                Class<?> screenClass;
-                try {
-                    screenClass = Class.forName(
-                            "dev.hamilo.client.HamiloClickGuiScreen", true, gameLoader);
-                } catch (ClassNotFoundException | LinkageError notVisibleFromGameLoader) {
-                    // Some injectors keep the injected JAR in a separate loader.
-                    screenClass = Class.forName(
-                            "dev.hamilo.client.HamiloClickGuiScreen", true,
-                            HamiloAgent.class.getClassLoader());
-                }
-                Field screenField = findField(minecraftClass, "currentScreen");
+                Method setScreen = findMethod(minecraftClass,
+                        new String[]{"method_1507", "setScreen"}, 1);
+                Class<?> screenClass = Class.forName(
+                        "dev.hamilo.client.HamiloClickGuiScreen", true, gameLoader);
+                Field screenField = findField(minecraftClass,
+                        "field_1755", "currentScreen");
 
                 boolean wasDown = false;
                 System.out.println("[Hamilo] Injected. Press Right Shift to toggle the GUI.");
@@ -89,22 +89,29 @@ public final class HamiloAgent {
         for (int attempt = 0; attempt < 600; attempt++) {
             if (instrumentation != null) {
                 for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
-                    if ("net.minecraft.client.MinecraftClient".equals(loaded.getName())) {
-                        return loaded;
-                    }
+                    if (isMinecraftClass(loaded.getName())) return loaded;
                 }
             }
 
             for (ClassLoader loader : candidateLoaders()) {
-                try {
-                    return Class.forName("net.minecraft.client.MinecraftClient", false, loader);
-                } catch (ClassNotFoundException | LinkageError ignored) {
-                    // Try the next loader; launchers can isolate game and injected JARs.
+                for (String className : MINECRAFT_CLASSES) {
+                    try {
+                        return Class.forName(className, false, loader);
+                    } catch (ClassNotFoundException | LinkageError ignored) {
+                        // Try the next mapping name and class loader.
+                    }
                 }
             }
             Thread.sleep(100L);
         }
         return null;
+    }
+
+    private static boolean isMinecraftClass(String name) {
+        for (String candidate : MINECRAFT_CLASSES) {
+            if (candidate.equals(name)) return true;
+        }
+        return false;
     }
 
     private static Set<ClassLoader> candidateLoaders() {
@@ -125,26 +132,51 @@ public final class HamiloAgent {
         }
     }
 
-    private static Field findField(Class<?> type, String name) throws NoSuchFieldException {
-        for (Class<?> current = type; current != null; current = current.getSuperclass()) {
-            try {
-                Field field = current.getDeclaredField(name);
-                field.setAccessible(true);
-                return field;
-            } catch (NoSuchFieldException ignored) {
-                // Continue through the superclass chain.
-            }
-        }
-        throw new NoSuchFieldException(type.getName() + "." + name);
+    private static Object invokeStaticNoArgs(Class<?> type, String... names)
+            throws ReflectiveOperationException {
+        return findMethod(type, names, 0).invoke(null);
     }
 
-    private static Method findSetScreen(Class<?> minecraftClass)
+    private static Object invokeNoArgs(Class<?> type, Object target, String... names)
+            throws ReflectiveOperationException {
+        return findMethod(type, names, 0).invoke(target);
+    }
+
+    private static Method findMethod(Class<?> type, String[] names, int parameterCount)
             throws NoSuchMethodException {
-        for (Method method : minecraftClass.getMethods()) {
-            if (method.getName().equals("setScreen") && method.getParameterCount() == 1) {
-                return method;
+        for (String name : names) {
+            for (Method method : type.getMethods()) {
+                if (method.getName().equals(name)
+                        && method.getParameterCount() == parameterCount) {
+                    return method;
+                }
+            }
+            for (Class<?> current = type; current != null; current = current.getSuperclass()) {
+                for (Method method : current.getDeclaredMethods()) {
+                    if (method.getName().equals(name)
+                            && method.getParameterCount() == parameterCount) {
+                        method.setAccessible(true);
+                        return method;
+                    }
+                }
             }
         }
-        throw new NoSuchMethodException("MinecraftClient.setScreen");
+        throw new NoSuchMethodException(type.getName() + " methods " + String.join("/", names));
+    }
+
+    private static Field findField(Class<?> type, String... names)
+            throws NoSuchFieldException {
+        for (String name : names) {
+            for (Class<?> current = type; current != null; current = current.getSuperclass()) {
+                try {
+                    Field field = current.getDeclaredField(name);
+                    field.setAccessible(true);
+                    return field;
+                } catch (NoSuchFieldException ignored) {
+                    // Continue through the class hierarchy.
+                }
+            }
+        }
+        throw new NoSuchFieldException(type.getName() + " fields " + String.join("/", names));
     }
 }
