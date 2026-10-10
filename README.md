@@ -1,30 +1,32 @@
 # Hamilo Client
 
-Hamilo Client is an experimental Minecraft Java Edition 1.21 client GUI packaged as a Java agent JAR for launchers that explicitly support loading/injecting Java agent JARs.
+Hamilo Client is an experimental Minecraft Java Edition 1.21 client GUI packaged as a Pojav-style `PreMain-Class` injection JAR.
 
 ## Current features
 
 - Press **Right Shift** to toggle the Hamilo Client GUI.
 - Press **Escape** to close the GUI.
 - The GUI does not pause single-player gameplay.
-- GitHub Actions builds the agent JAR.
+- GitHub Actions builds the injection JAR.
 
 ## Compatibility
 
 - Minecraft Java Edition 1.21
 - Java 21
-- A launcher/runtime that supports this JAR's Java-agent entry point and compatible class/mapping access
+- A Pojav build that supports the custom `PreMain-Class` injection entry point.
 
-**Important:** A Java agent JAR is not the same as a Fabric mod JAR. This project no longer requires a Fabric profile or Fabric API. However, Java-agent support varies by launcher. Pojav's “Inject .jar” option must support Java instrumentation agents for this artifact to work; the manifest alone cannot add that capability. If Pojav reports that it cannot read the file, make sure you selected the actual `.jar`, not the downloaded GitHub Actions artifact `.zip`.
+**Important:** Do not choose **Execute .jar** for a running Java 21 game if your Pojav build reports that this feature is incompatible with Java 21. That message comes from the launcher's execution feature; changing the JAR manifest cannot override it. Launch Minecraft first, then use the launcher's **Inject .jar** option if your installed build provides it. If that option is unavailable or rejects the JAR, the launcher itself needs a compatible injection path.
+
+This is an injected client JAR, not a Fabric mod JAR. It does not require Fabric API. The manifest includes `PreMain-Class` for Pojav-style injection and the standard Java-agent keys for compatible launchers. Runtime behavior still depends on the specific launcher build and Minecraft class mappings.
 
 ## Download from GitHub Actions
 
-1. Open the repository's **Actions** tab and select a successful build.
-2. Download the `hamilo-client-jar` artifact.
+1. Open the repository's **Actions** tab and select the latest successful build.
+2. Download the `hamilo-client-injectable-jar` artifact.
 3. Extract the downloaded ZIP archive.
-4. Select the contained `hamilo-client-1.0.0.jar` file in the launcher's injection option. Do not rename or select the ZIP itself.
+4. Select the `.jar` file inside it in **Inject .jar**. Do not select the artifact ZIP.
 
-The artifact is a ZIP because GitHub Actions wraps uploaded artifacts in ZIP archives; the JAR is inside it.
+GitHub Actions wraps artifacts in ZIP archives; the actual JAR is inside.
 
 ## Build locally
 
@@ -36,10 +38,6 @@ gradle build
 
 The agent JAR is written to `build/libs/hamilo-client-1.0.0.jar`.
 
-## Loading model and limitations
+## Validation
 
-The JAR declares `Premain-Class` and `Agent-Class` in its manifest. This is the Java instrumentation agent mechanism, not Fabric's mod entrypoint. It does not guarantee that a launcher supports injection or that the agent can resolve Minecraft classes in every runtime. The current bootstrap is experimental and must be validated against the exact Pojav version and Minecraft runtime.
-
-## GitHub Actions
-
-Push a commit or manually run the build workflow. Download the `hamilo-client-jar` artifact from a successful run and extract it before selecting the JAR.
+A successful GitHub Actions build confirms compilation and checks the injection manifest. It does not by itself prove compatibility with every Pojav build; test injection in the exact launcher version you use.
