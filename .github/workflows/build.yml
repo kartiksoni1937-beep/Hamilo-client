@@ -40,6 +40,8 @@ jobs:
           grep -Eiq '^Agent-Class: dev\.hamilo\.client\.HamiloAgent$' /tmp/hamilo-manifest.txt
           grep -Eiq '^Main-Class: dev\.hamilo\.client\.HamiloAgent$' /tmp/hamilo-manifest.txt
           javap -verbose -classpath "$JAR" dev.hamilo.client.HamiloAgent | grep -q 'major version: 52'
+          unzip -p "$JAR" fabric.mod.json | grep -q '"id": "hamilo-client"'
+          unzip -p "$JAR" fabric.mod.json | grep -q 'dev.hamilo.client.HamiloFabricClient'
       - name: Upload injectable JAR
         uses: actions/upload-artifact@v4
         with:
